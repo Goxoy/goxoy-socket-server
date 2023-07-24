@@ -53,7 +53,8 @@ impl SocketServer {
     }
     fn handle_client(&mut self, mut stream: TcpStream) {
         let mut data = [0 as u8; 1024];
-        while match stream.read(&mut data) {
+        loop {
+            match stream.read(&mut data){
             Ok(size) => {
                 if size > 0 {
                     println!("size: {}", size);
@@ -61,12 +62,20 @@ impl SocketServer {
                     if written.is_err() {
                         println!("data yazim hatasi");
                     } else {
-                        //println!("data gonderildi");
+                        println!("data gonderildi");
                     }
                     self.callback.unwrap()(data.to_vec());
+                    let reply_arr="ok".as_bytes();
+                    let result=stream.write_all(&reply_arr);
+                    if result.is_err(){
+                        println!("write err");
+                    }else{
+                        println!("write OK");
+                    }
+                    //stream.write(&data[0..size]).unwrap();
+                }else{
+                    break;
                 }
-                //stream.write(&data[0..size]).unwrap();
-                true
             }
             Err(_) => {
                 println!(
@@ -74,9 +83,11 @@ impl SocketServer {
                     stream.peer_addr().unwrap()
                 );
                 stream.shutdown(Shutdown::Both).unwrap();
-                false
+                break;
             }
-        } {}
+            } 
+        }
+        //println!("cikis");
     }
     pub fn remove_assigned_callback(&mut self) {
         self.callback = None;
@@ -100,8 +111,8 @@ impl SocketServer {
         for stream in listener.incoming() {
             match stream {
                 Ok(stream) => {
-                    self.handle_client(stream);
                     println!("Connection established!");
+                    self.handle_client(stream);
                 }
                 Err(_e) => {
                     println!("Connection error!");
@@ -139,8 +150,6 @@ fn full_test() {
     );
     println!("server_obj.local_addr: {}", server_obj.local_addr);
     server_obj.assign_callback(|data| {
-        //println!("inside assign_callback");
-        //dbg!(data.clone());
         let vec_to_string = String::from_utf8(data).unwrap(); // Converting to string
         println!("vec_to_string: {}", vec_to_string); // Output: Hello World
     });
