@@ -61,32 +61,33 @@ impl SocketServer {
         loop {
             match stream.read(&mut data){
             Ok(size) => {
-                if size > 0 {
-                    println!("size: {}", size);
-                    let written = stream.write(&data[0..size]);
-                    if written.is_err() {
-                        println!("data yazim hatasi");
-                    } else {
-                        println!("data gonderildi");
-                    }
-                    self.callback.unwrap()(data.to_vec());
-                    let reply_arr="ok".as_bytes();
-                    let result=stream.write_all(&reply_arr);
-                    if result.is_err(){
-                        println!("write err");
-                    }else{
-                        println!("write OK");
-                    }
-                    //stream.write(&data[0..size]).unwrap();
-                }else{
+                if size == 0 {
+                    println!("socket baglantisi kapatildi");
                     break;
                 }
+                println!("size: {}", size);
+                let written = stream.write(&data[0..size]);
+                if written.is_err() {
+                    println!("data yazim hatasi");
+                } else {
+                    println!("data gonderildi");
+                }
+                self.callback.unwrap()(data.to_vec());
+                let reply_arr="ok".as_bytes();
+                let result=stream.write_all(&reply_arr);
+                if result.is_err(){
+                    println!("write err");
+                }else{
+                    println!("write OK");
+                }
+                //stream.write(&data[0..size]).unwrap();
             }
-            Err(_) => {
+            Err(e) => {
                 println!(
                     "An error occurred, terminating connection with {}",
                     stream.peer_addr().unwrap()
                 );
+                dbg!(e);
                 stream.shutdown(Shutdown::Both).unwrap();
                 break;
             }
