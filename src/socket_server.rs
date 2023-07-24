@@ -1,11 +1,12 @@
 use goxoy_address_parser::address_parser::{AddressParser, IPAddressVersion, ProtocolType};
 use std::{
     io::{Read, Write},
-    net::{Shutdown, TcpListener, TcpStream},
+    net::{Shutdown, TcpListener, TcpStream}, collections::HashMap,
 };
 
 #[derive(Debug)]
 pub struct SocketServer {
+    stream_list:HashMap<String,TcpStream>,
     started: bool,
     defined: bool,
     pub local_addr: String,
@@ -16,6 +17,7 @@ pub struct SocketServer {
 impl SocketServer {
     pub fn new() -> Self {
         SocketServer {
+            stream_list:HashMap::new(),
             local_addr: String::new(),
             started: false,
             defined: false,
@@ -36,6 +38,7 @@ impl SocketServer {
             ip_version: ip_version,
         });
         SocketServer {
+            stream_list:HashMap::new(),
             local_addr: local_addr,
             defined: true,
             started: false,
@@ -51,7 +54,9 @@ impl SocketServer {
     pub fn set_buffer_size(&mut self, buffer_size: usize) {
         self.buffer_size = buffer_size;
     }
-    fn handle_client(&mut self, mut stream: TcpStream) {
+    //fn handle_client(&mut self, mut stream: TcpStream) {
+    fn handle_client(&mut self, peer_addr: String) {
+        let mut stream=self.stream_list.get_mut(&peer_addr).unwrap();
         let mut data = [0 as u8; 1024];
         loop {
             match stream.read(&mut data){
@@ -111,8 +116,14 @@ impl SocketServer {
         for stream in listener.incoming() {
             match stream {
                 Ok(stream) => {
-                    println!("Connection established!");
-                    self.handle_client(stream);
+                    //stream.peer_addr().unwrap()
+                    let peer_addr=stream.peer_addr().unwrap().to_string();
+                    println!("stream.local_addr().unwrap() :{}",peer_addr);
+                    if self.stream_list.contains_key(&peer_addr)==false{
+                        self.stream_list.insert(peer_addr.clone(), stream);
+                    }
+                    //self.handle_client(stream);
+                    self.handle_client(peer_addr);
                 }
                 Err(_e) => {
                     println!("Connection error!");
