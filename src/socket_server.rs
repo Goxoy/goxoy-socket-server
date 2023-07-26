@@ -1,13 +1,15 @@
-use goxoy_address_parser::address_parser::{AddressParser, IPAddressVersion, ProtocolType};
 use core::time;
+use goxoy_address_parser::address_parser::{AddressParser, IPAddressVersion, ProtocolType};
 use std::{
-    io::{Read, Write, BufReader, BufRead, self},
-    net::{Shutdown, TcpListener, TcpStream}, collections::HashMap, thread,
+    collections::HashMap,
+    io::{self, BufRead, BufReader, Read, Write},
+    net::{Shutdown, TcpListener, TcpStream},
+    thread,
 };
 
 #[derive(Debug)]
 pub struct SocketServer {
-    stream_list:HashMap<String,TcpStream>,
+    stream_list: HashMap<String, TcpStream>,
     started: bool,
     defined: bool,
     pub local_addr: String,
@@ -18,7 +20,7 @@ pub struct SocketServer {
 impl SocketServer {
     pub fn new() -> Self {
         SocketServer {
-            stream_list:HashMap::new(),
+            stream_list: HashMap::new(),
             local_addr: String::new(),
             started: false,
             defined: false,
@@ -39,7 +41,7 @@ impl SocketServer {
             ip_version: ip_version,
         });
         SocketServer {
-            stream_list:HashMap::new(),
+            stream_list: HashMap::new(),
             local_addr: local_addr,
             defined: true,
             started: false,
@@ -55,24 +57,27 @@ impl SocketServer {
     pub fn set_buffer_size(&mut self, buffer_size: usize) {
         self.buffer_size = buffer_size;
     }
-    fn handle_client(&mut self,mut stream: TcpStream) -> bool{
+    fn handle_client(&mut self, mut stream: TcpStream) -> bool {
         let mut data = [0 as u8; 50];
-        match stream.read(&mut data){
+        match stream.read(&mut data) {
             Ok(size) => {
                 if size > 0 {
-                    println!("income size : {}",size);
+                    println!("income size : {}", size);
                     //println!("income data : {:?}",data);
                     let written = stream.write(&data[0..size]);
                     if written.is_err() {
                         println!("data yazim hatasi");
                     } else {
                         println!("data gonderildi");
-                        self.callback.unwrap()(data.to_vec());
-                        let reply_arr="ok".as_bytes();
-                        let result=stream.write_all(&reply_arr);
-                        if result.is_err(){
+                        if self.callback.is_some() {
+                            let callback_obj = self.callback.unwrap();
+                            callback_obj(data.to_vec());
+                        }
+                        let reply_arr = "ok".as_bytes();
+                        let result = stream.write_all(&reply_arr);
+                        if result.is_err() {
                             println!("write err");
-                        }else{
+                        } else {
                             println!("write OK");
                         }
                     }
@@ -99,26 +104,26 @@ impl SocketServer {
     pub fn assign_callback(&mut self, callback: fn(Vec<u8>)) {
         self.callback = Some(callback);
     }
-    fn handle_sender(mut stream: TcpStream) -> io::Result<()>{
+    fn handle_sender(mut stream: TcpStream) -> io::Result<()> {
         // Handle multiple access stream
-        let mut buf = [0;512];
-        for _ in 0..1000{
+        let mut buf = [0; 512];
+        for _ in 0..1000 {
             // let the receiver get a message from a sender
             let bytes_read = stream.read(&mut buf)?;
             // sender stream in a mutable variable
-            if bytes_read == 0{
+            if bytes_read == 0 {
                 return Ok(());
             }
             stream.write(&buf[..bytes_read])?;
             // Print acceptance message
             //read, print the message sent
-            println!("from the sender:{}",String::from_utf8_lossy(&buf));
+            println!("from the sender:{}", String::from_utf8_lossy(&buf));
             // And you can sleep this connection with the connected sender
-            thread::sleep(time::Duration::from_secs(1));  
+            thread::sleep(time::Duration::from_secs(1));
         }
         // success value
         Ok(())
-    }    
+    }
     fn start_tcp_old(&mut self, addr_obj: AddressParser) -> bool {
         if self.callback.is_none() {
             println!("callback did not define");
@@ -134,7 +139,7 @@ impl SocketServer {
         }
         println!("listener started");
         let listener = listener.unwrap();
-        loop{
+        loop {
             for stream in listener.incoming() {
                 match stream {
                     Ok(stream) => {
@@ -149,7 +154,7 @@ impl SocketServer {
                         if stream.is_some(){
                             println!("stream object success");
                             std::thread::spawn(move|| {
-                                //handle_client(stream,count)                                
+                                //handle_client(stream,count)
                                 SocketServer::handle_client(TcpStream::try_clone(stream.unwrap()).unwrap());
                                 //handle_client(TcpStream::try_clone(stream.unwrap()).unwrap());
                             });
@@ -186,7 +191,7 @@ impl SocketServer {
         https://riptutorial.com/rust/example/4404/a-simple-tcp-client-and-server-application--echo
         */
         println!("listener started");
-        let receiver_listener=receiver_listener.unwrap();
+        let receiver_listener = receiver_listener.unwrap();
         // Getting a handle of the underlying thread.
         let mut thread_vec: Vec<thread::JoinHandle<()>> = Vec::new();
         // listen to incoming connections messages and bind them to a sever socket address.
@@ -195,12 +200,11 @@ impl SocketServer {
             // let the receiver connect with the sender
             let handle = thread::spawn(move || {
                 //receiver failed to read from the stream
-                SocketServer::handle_sender(stream).unwrap_or_else(|error| eprintln!("{:?}",error))
+                SocketServer::handle_sender(stream).unwrap_or_else(|error| eprintln!("{:?}", error))
             });
-            
+
             // Push messages in the order they are sent
             thread_vec.push(handle);
-
         }
         println!("buraya geldi");
         for handle in thread_vec {
@@ -234,7 +238,7 @@ fn full_test() {
         let mut data = [0 as u8; 50]; // using 50 byte buffer
         loop{ match stream.read(&mut data) {
             Ok(size) => {
-                
+
                 // echo everything!
                 println!("size {}",size);
                 println!("{} yazildi {:?}",count,data);
@@ -247,7 +251,7 @@ fn full_test() {
                 false
             }
         }
-    }    
+    }
     let listener = TcpListener::bind("0.0.0.0:1234").unwrap();
     // accept connections and process them, spawning a new thread for each one
     println!("Server listening on port 1234");
