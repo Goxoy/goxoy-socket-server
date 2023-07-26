@@ -1,5 +1,6 @@
 use core::time;
 use goxoy_address_parser::address_parser::{AddressParser, IPAddressVersion, ProtocolType};
+use goxoy_socket_client::socket_client::SocketClient;
 use std::{
     collections::HashMap,
     io::{self, BufRead, BufReader, Read, Write},
@@ -274,6 +275,30 @@ fn full_test() {
     // close the socket server
     drop(listener);
     */
+    
+    thread::spawn(||{
+        println!("thread started");
+        let mut client_obj = SocketClient::new_with_config(AddressParser {
+            ip_address: "127.0.0.1".to_string(),
+            port_no: 1234,
+            protocol_type: ProtocolType::TCP,
+            ip_version: IPAddressVersion::IpV4,
+        });
+        client_obj.debug_mode(false);
+        client_obj.assign_callback(|data| {
+            let vec_to_string = String::from_utf8(data).unwrap();
+            println!("vec_to_string: {}", vec_to_string);
+        });
+        client_obj.connect();
+        for _ in 1..5{
+            let result_obj = client_obj.send("test_msg".as_bytes().to_vec());
+            println!("result_obj: {:?}", result_obj);
+            client_obj.listen(1500);
+        }
+        client_obj.close_connection();
+    });
+
+
     // cargo test  --lib full_test -- --nocapture
     let mut server_obj = SocketServer::new_with_config(
         ProtocolType::TCP,

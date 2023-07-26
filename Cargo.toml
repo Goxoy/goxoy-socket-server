@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 goxoy-address-parser = "0.0.3"
+goxoy-socket-client = "0.1.3"
