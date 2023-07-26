@@ -276,6 +276,9 @@ fn full_test() {
     drop(listener);
     */
     
+    /*
+    https://www.youtube.com/watch?v=K8LNPYNvT-U&t=2s
+    */
     thread::spawn(||{
         println!("thread started");
         let mut client_obj = SocketClient::new_with_config(AddressParser {
