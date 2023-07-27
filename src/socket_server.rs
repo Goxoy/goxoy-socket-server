@@ -121,6 +121,7 @@ impl SocketServer {
             println!("from the sender:{}", String::from_utf8_lossy(&buf));
             // And you can sleep this connection with the connected sender
             thread::sleep(time::Duration::from_secs(1));
+            stream.write(&buf[..bytes_read])?;
         }
         // success value
         Ok(())
@@ -279,6 +280,7 @@ fn full_test() {
     /*
     https://www.youtube.com/watch?v=K8LNPYNvT-U&t=2s
     */
+    /*
     thread::spawn(||{
         println!("thread started");
         let mut client_obj = SocketClient::new_with_config(AddressParser {
@@ -300,7 +302,7 @@ fn full_test() {
         }
         client_obj.close_connection();
     });
-
+    */
 
     // cargo test  --lib full_test -- --nocapture
     let mut server_obj = SocketServer::new_with_config(

@@ -10,9 +10,9 @@ checksum = "490c575dcd54ff3281e8e85d4abb0f1da7bd16b46fa6a44c6f903c2bcbc588b7"
 
 [[package]]
 name = "goxoy-socket-client"
-version = "0.1.3"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af446c7854c2c3d693354c87668458a0f96b9f41b11f2a6e23d2764f54cd43d8"
+checksum = "4fa454a18978fb88fa8e3514af507dc16593ee3ee35fab713d70015d372ca253"
 dependencies = [
  "goxoy-address-parser",
 ]
