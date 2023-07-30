@@ -1,28 +1,17 @@
-# Goxoy Key Value DB
+# Goxoy Socket Server
 
-SQLite ile key value tabanlı data kayıt işlemleri için RUST tabanlı kütüphane.
-Alt kitaplık olarak "rusqlite" kitaplığı kullanılmıştır.
-
+Sunucu Soket kitaplığı. rust fonksiyonları kullanılarak geliştirilmiştir.
 
 ## Kullanım / Örnekler
 
 ```rust
-let db_name = "key-value-db-name";
-let mut db_obj = KeyValueDb::new(&db_name);
-
-// kayıt ekleme ve güncelleme için
-db_obj.set_value("key-text", "value-text");
-
-// kayıt silmek için
-db_obj.delete("key-text");
-
-// kayıt okumak için
-let value_obj : Option<String> = db_obj.get_value("key-text");
-if value_obj.is_some(){
-    println!("bulunan kayit: {}", value_obj.unwrap());
-}else{
-    println!("kayit bulunamadi");
-}
+    // doğrudan konfigüre ederek başlatabilirsiniz.
+    let mut server_obj = SocketServer::new_with_config(
+        ProtocolType::TCP,
+        "127.0.0.1".to_string(),
+        1234,
+        IPAddressVersion::IpV4,
+    );
 
 ```
 
