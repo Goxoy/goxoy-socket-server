@@ -135,6 +135,7 @@ impl SocketServer {
         true
     }
     // https://www.youtube.com/watch?v=hzSsOV2F7-s
+    // https://github.com/richardknox/rust-webserver/blob/master/src/bin/main.rs
     fn start_tcp(&mut self) -> bool {
         let listener = TcpListener::bind(&self.url);
         if listener.is_err() {
