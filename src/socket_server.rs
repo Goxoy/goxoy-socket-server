@@ -27,9 +27,14 @@ pub enum SocketServerStatus {
 }
 
 #[derive(Clone, Debug)]
+pub struct SocketServerMessageList {
+    peer_addr:String,
+    data:Vec<u8>
+}
+#[derive(Clone, Debug)]
 pub struct SocketServer {
     url: String,
-    stream_list: HashMap<String, bool>,
+    msg_list: Vec<SocketServerMessageList>,
     started: bool,
     defined: bool,
     pub local_addr: String,
@@ -43,7 +48,7 @@ impl SocketServer {
     pub fn new() -> Self {
         SocketServer {
             url: String::new(),
-            stream_list: HashMap::new(),
+            msg_list:Vec::new(),
             local_addr: String::new(),
             started: false,
             defined: false,
@@ -67,7 +72,7 @@ impl SocketServer {
         });
         SocketServer {
             url: String::new(),
-            stream_list: HashMap::new(),
+            msg_list:Vec::new(),
             local_addr: local_addr,
             defined: true,
             started: false,
@@ -125,12 +130,10 @@ impl SocketServer {
         //stream.write("ok".as_bytes()).unwrap();
         //stream.flush().unwrap();
     }
-    /*
-    pub fn send(&mut self, data: Vec<u8>) -> bool {
-        let write_result = stream.write(data.as_slice());
-        if write_result.is_ok() {
+    
+    pub fn send(&mut self,peer_addr:String, data: Vec<u8>){
+        self.msg_list.push(SocketServerMessageList { peer_addr: peer_addr, data: data });
     }
-    */
     fn start_udp(&mut self) -> bool {
         true
     }
@@ -152,13 +155,24 @@ impl SocketServer {
             let received_cloned = self.fn_receive_data;
             let error_cloned = self.fn_error;
             let new_client_cloned = self.fn_new_client;
+            let msg_list_cloned=self.msg_list.clone();
+            
             pool.execute(move || {
-                SocketServer::handle_connection(
-                    stream.unwrap(),
-                    received_cloned,
-                    error_cloned,
-                    new_client_cloned,
-                );
+                std::thread::spawn(move||{
+                    SocketServer::handle_connection(
+                        stream.unwrap(),
+                        received_cloned,
+                        error_cloned,
+                        new_client_cloned,
+                    );
+                });
+                std::thread::spawn(move||loop{
+                    if msg_list_cloned.len()>0{
+                        
+                    }
+                    println!("ddd {}",msg_list_cloned.len());
+                    std::thread::sleep(Duration::from_micros(800000));
+                });
             });
         }
         return true;
@@ -204,12 +218,15 @@ fn full_test() {
         let vec_to_string = String::from_utf8(data.clone()).unwrap(); // Converting to string
         println!("income callback [ {} ]: {}", data.len(), vec_to_string); // Output: Hello World
     });
-    server_obj.on_new_client(|on_new_client| {
+
+    server_obj.on_new_client(move |on_new_client| {
         println!("new client connected : {}", on_new_client);
     });
     server_obj.on_error(|data| {
         println!("on error : {:?}", data);
     });
     server_obj.start();
+
+    //server_obj.send(on_new_client.clone(), "welcome".as_bytes().to_vec());
     assert!(true)
 }
