@@ -1,11 +1,17 @@
-use std::io::Write;
-use std::io::Read;
+#![warn(unused_imports)]
 use goxoy_address_parser::address_parser::{AddressParser, IPAddressVersion, ProtocolType};
+use std::io::Read;
+use std::io::Write;
+use std::sync::Mutex;
+use std::thread;
+use std::time::Duration;
 use std::{
     collections::HashMap,
     net::{TcpListener, TcpStream},
     sync::{Arc, RwLock},
 };
+
+use crate::ThreadPool;
 
 #[derive(Debug)]
 pub enum SocketServerErrorType {
@@ -22,8 +28,8 @@ pub enum SocketServerStatus {
 
 #[derive(Clone, Debug)]
 pub struct SocketServer {
-    url:String,
-    stream_list: Arc<RwLock<HashMap<String, TcpStream>>>,
+    url: String,
+    stream_list: HashMap<String, bool>,
     started: bool,
     defined: bool,
     pub local_addr: String,
@@ -37,7 +43,7 @@ impl SocketServer {
     pub fn new() -> Self {
         SocketServer {
             url: String::new(),
-            stream_list: Arc::new(RwLock::new(HashMap::new())),
+            stream_list: HashMap::new(),
             local_addr: String::new(),
             started: false,
             defined: false,
@@ -47,7 +53,12 @@ impl SocketServer {
             buffer_size: 1024,
         }
     }
-    pub fn new_with_config(protocol_type: ProtocolType,ip_address: String,port_no: usize,ip_version: IPAddressVersion) -> Self {
+    pub fn new_with_config(
+        protocol_type: ProtocolType,
+        ip_address: String,
+        port_no: usize,
+        ip_version: IPAddressVersion,
+    ) -> Self {
         let local_addr = AddressParser::object_to_string(AddressParser {
             ip_address: ip_address,
             port_no: port_no,
@@ -56,7 +67,7 @@ impl SocketServer {
         });
         SocketServer {
             url: String::new(),
-            stream_list: Arc::new(RwLock::new(HashMap::new())),
+            stream_list: HashMap::new(),
             local_addr: local_addr,
             defined: true,
             started: false,
@@ -83,60 +94,70 @@ impl SocketServer {
     pub fn on_error(&mut self, on_error: fn(SocketServerErrorType)) {
         self.fn_error = Some(on_error);
     }
-    fn start_tcp(&self){
-        https://www.youtube.com/watch?v=hzSsOV2F7-s
-        
-        let listener =TcpListener::bind(&self.url);
-        if listener.is_err(){
+    pub fn handle_connection(
+        mut stream: TcpStream,
+        receive_data_func: Option<fn(Vec<u8>)>,
+        error_func: Option<fn(SocketServerErrorType)>,
+        new_client_func: Option<fn(String)>,
+    ) {
+        if new_client_func.is_some() {
+            let peer_addr = stream.peer_addr().unwrap().to_string();
+            new_client_func.unwrap()(peer_addr);
+        }
+        let mut buffer = [0; 4096];
+        loop {
+            let received_size = stream.read(&mut buffer);
+            if received_size.is_ok() {
+                let received_size = received_size.unwrap();
+                if received_size > 0 {
+                    if receive_data_func.is_some() {
+                        receive_data_func.unwrap()(buffer[..received_size].to_vec());
+                    }
+                }
+            } else {
+                if error_func.is_some() {
+                    error_func.unwrap()(SocketServerErrorType::Communication);
+                }
+                break;
+            }
+        }
+
+        //stream.write("ok".as_bytes()).unwrap();
+        //stream.flush().unwrap();
+    }
+    /*
+    pub fn send(&mut self, data: Vec<u8>) -> bool {
+        let write_result = stream.write(data.as_slice());
+        if write_result.is_ok() {
+    }
+    */
+    // https://www.youtube.com/watch?v=hzSsOV2F7-s
+    fn start_tcp(&mut self) -> bool {
+        let listener = TcpListener::bind(&self.url);
+        if listener.is_err() {
             if self.fn_error.is_some() {
                 let fn_error_obj = self.fn_error.unwrap();
                 fn_error_obj(SocketServerErrorType::Connection);
             }
-        }else{
-            let listener=listener.unwrap();
-
-            println!("Server started succesfully");
-
-            for stream in listener.incoming() {
-                match stream {
-                    Ok(stream) => {
-                        let peer_addr=stream.peer_addr().unwrap().to_string();
-                        println!("peer_addr: {}",peer_addr.clone());
-
-                        if self.stream_list.read().unwrap().contains_key(&peer_addr)==false{
-                            self.stream_list.write().unwrap().insert(peer_addr.clone(), stream);
-                            if self.fn_new_client.is_some() {
-                                let fn_new_client_obj = self.fn_new_client.unwrap();
-                                fn_new_client_obj(peer_addr.clone());
-                            }
-                        }
-                        let hash_obj=self.stream_list.write().unwrap();
-                        let mut new_hash_obj=hash_obj.get(&peer_addr).unwrap();
-
-                        let mut data = [0 as u8; 4096]; // using 50 byte buffer
-                        let read_result=new_hash_obj.read(&mut data);
-                        if read_result.is_ok(){
-                            let data_size=read_result.unwrap();
-                            if self.fn_receive_data.is_some() {
-                                let fn_receive_data_obj = self.fn_receive_data.unwrap();
-                                fn_receive_data_obj(data[..data_size].to_vec());
-                            }
-                        }else{
-                            if self.fn_error.is_some() {
-                                let fn_error_obj = self.fn_error.unwrap();
-                                fn_error_obj(SocketServerErrorType::Connection);
-                            }
-                        }
-                    },
-                    Err(_error) => {
-                        if self.fn_error.is_some() {
-                            let fn_error_obj = self.fn_error.unwrap();
-                            fn_error_obj(SocketServerErrorType::Connection);
-                        }            
-                    },
-                }
-            }
+            return false;
         }
+
+        let pool = ThreadPool::new(50);
+        let listener = listener.unwrap();
+        for stream in listener.incoming() {
+            let received_cloned = self.fn_receive_data;
+            let error_cloned = self.fn_error;
+            let new_client_cloned = self.fn_new_client;
+            pool.execute(move || {
+                SocketServer::handle_connection(
+                    stream.unwrap(),
+                    received_cloned,
+                    error_cloned,
+                    new_client_cloned,
+                );
+            });
+        }
+        return true;
     }
     pub fn start(&mut self) -> bool {
         if self.defined == false {
@@ -145,20 +166,18 @@ impl SocketServer {
         self.started = true;
         let addr_obj = AddressParser::string_to_object(self.local_addr.clone());
         if addr_obj.protocol_type == ProtocolType::TCP {
-            println!("start TCP server");
+            //println!("start TCP server");
             let mut bind_str = addr_obj.ip_address;
             bind_str.push_str(":");
             bind_str.push_str(&addr_obj.port_no.to_string());
-            self.url=bind_str.clone();    
+            self.url = bind_str.clone();
             if self.fn_receive_data.is_none() {
                 println!("callback did not define");
-            }else{
-                println!("listener started");
-                println!("self_clone.url: {}",self.url);        
+            } else {
                 self.start_tcp();
             }
         } else {
-            println!("start udp server");
+            //println!("start udp server");
             self.start_tcp();
         }
         return true;
@@ -179,11 +198,11 @@ fn full_test() {
         let vec_to_string = String::from_utf8(data.clone()).unwrap(); // Converting to string
         println!("income callback [ {} ]: {}", data.len(), vec_to_string); // Output: Hello World
     });
-    server_obj.on_new_client(|on_new_client|{
-        println!("new client connected : {}",on_new_client);
+    server_obj.on_new_client(|on_new_client| {
+        println!("new client connected : {}", on_new_client);
     });
     server_obj.on_error(|data| {
-        println!("on error : {:?}",data);
+        println!("on error : {:?}", data);
     });
     server_obj.start();
     assert!(true)
