@@ -131,6 +131,9 @@ impl SocketServer {
         if write_result.is_ok() {
     }
     */
+    fn start_udp(&mut self) -> bool {
+        true
+    }
     // https://www.youtube.com/watch?v=hzSsOV2F7-s
     fn start_tcp(&mut self) -> bool {
         let listener = TcpListener::bind(&self.url);
@@ -166,7 +169,6 @@ impl SocketServer {
         self.started = true;
         let addr_obj = AddressParser::string_to_object(self.local_addr.clone());
         if addr_obj.protocol_type == ProtocolType::TCP {
-            //println!("start TCP server");
             let mut bind_str = addr_obj.ip_address;
             bind_str.push_str(":");
             bind_str.push_str(&addr_obj.port_no.to_string());
@@ -177,8 +179,11 @@ impl SocketServer {
                 self.start_tcp();
             }
         } else {
-            //println!("start udp server");
-            self.start_tcp();
+            if self.fn_receive_data.is_none() {
+                println!("callback did not define");
+            } else {
+                self.start_udp();
+            }
         }
         return true;
     }
