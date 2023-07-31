@@ -1,4 +1,7 @@
 #![warn(unused_imports)]
+use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc;
+
 use goxoy_address_parser::address_parser::{AddressParser, IPAddressVersion, ProtocolType};
 use std::io::Read;
 use std::io::Write;
@@ -31,10 +34,12 @@ pub struct SocketServerMessageList {
     peer_addr:String,
     data:Vec<u8>
 }
-#[derive(Clone, Debug)]
+#[derive( Debug)]
 pub struct SocketServer {
+    tx_obj:Sender<Vec<u8>>,
+    rx_obj:Receiver<Vec<u8>>,
     url: String,
-    msg_list: Vec<SocketServerMessageList>,
+    //msg_list: Vec<SocketServerMessageList>,
     started: bool,
     defined: bool,
     pub local_addr: String,
@@ -46,9 +51,12 @@ pub struct SocketServer {
 
 impl SocketServer {
     pub fn new() -> Self {
+        let (tx_obj, rx_obj): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
         SocketServer {
+            tx_obj:tx_obj,
+            rx_obj:rx_obj,
             url: String::new(),
-            msg_list:Vec::new(),
+            //msg_list:Vec::new(),
             local_addr: String::new(),
             started: false,
             defined: false,
@@ -70,9 +78,12 @@ impl SocketServer {
             protocol_type: protocol_type,
             ip_version: ip_version,
         });
+        let (tx_obj, rx_obj): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
         SocketServer {
+            tx_obj:tx_obj,
+            rx_obj:rx_obj,
             url: String::new(),
-            msg_list:Vec::new(),
+            //msg_list:Vec::new(),
             local_addr: local_addr,
             defined: true,
             started: false,
@@ -131,8 +142,14 @@ impl SocketServer {
         //stream.flush().unwrap();
     }
     
-    pub fn send(&mut self,peer_addr:String, data: Vec<u8>){
-        self.msg_list.push(SocketServerMessageList { peer_addr: peer_addr, data: data });
+    pub fn send(&mut self,peer_addr:String, data: Vec<u8>)->bool{
+        let result=self.tx_obj.send(data);
+        if result.is_ok(){
+            return true;
+        }else{
+            return false;
+        }
+        //self.msg_list.push(SocketServerMessageList { peer_addr: peer_addr, data: data });
     }
     fn start_udp(&mut self) -> bool {
         true
@@ -155,8 +172,8 @@ impl SocketServer {
             let received_cloned = self.fn_receive_data;
             let error_cloned = self.fn_error;
             let new_client_cloned = self.fn_new_client;
-            let msg_list_cloned=self.msg_list.clone();
-            
+            //let msg_list_cloned=self.msg_list.clone();
+            let rx_cloned=&self.rx_obj;
             pool.execute(move || {
                 std::thread::spawn(move||{
                     SocketServer::handle_connection(
@@ -166,6 +183,15 @@ impl SocketServer {
                         new_client_cloned,
                     );
                 });
+
+                /*
+                let data:Vec<u8>=vec![1,2,3];
+
+                std::thread::spawn(move ||{
+                    stream.unwrap().write(&data);
+                    //for data in self.rx_obj.recv(){
+                    //}
+                });
                 std::thread::spawn(move||loop{
                     if msg_list_cloned.len()>0{
                         
@@ -173,6 +199,7 @@ impl SocketServer {
                     println!("ddd {}",msg_list_cloned.len());
                     std::thread::sleep(Duration::from_micros(800000));
                 });
+                */
             });
         }
         return true;
