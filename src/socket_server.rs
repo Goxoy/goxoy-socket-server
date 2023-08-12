@@ -1,20 +1,13 @@
-#![warn(unused_imports)]
+#![allow(warnings, unused)]
+use std::{
+    io::{ErrorKind, Read, Write},
+    net::TcpListener,
+    sync::mpsc,
+    thread,
+};
 use std::sync::mpsc::{Sender, Receiver};
-use std::sync::mpsc;
 
 use goxoy_address_parser::address_parser::{AddressParser, IPAddressVersion, ProtocolType};
-use std::io::Read;
-use std::io::Write;
-use std::sync::Mutex;
-use std::thread;
-use std::time::Duration;
-use std::{
-    collections::HashMap,
-    net::{TcpListener, TcpStream},
-    sync::{Arc, RwLock},
-};
-
-use crate::ThreadPool;
 
 #[derive(Debug)]
 pub enum SocketServerErrorType {
@@ -36,12 +29,10 @@ pub struct SocketServerMessageList {
 }
 #[derive( Debug)]
 pub struct SocketServer {
-    tx_obj:Sender<Vec<u8>>,
-    rx_obj:Receiver<Vec<u8>>,
     url: String,
     started: bool,
     defined: bool,
-    msg_list:Arc<Mutex<Vec<SocketServerMessageList>>>,
+    tx:Option<Sender<Vec<u8>>>,
     pub local_addr: String,
     fn_receive_data: Option<fn(Vec<u8>)>,
     fn_new_client: Option<fn(String)>,
@@ -51,13 +42,10 @@ pub struct SocketServer {
 
 impl SocketServer {
     pub fn new() -> Self {
-        let (tx_obj, rx_obj): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
         SocketServer {
-            tx_obj:tx_obj,
-            rx_obj:rx_obj,
-            msg_list:Arc::new(Mutex::new(Vec::new())),
             url: String::new(),
             local_addr: String::new(),
+            tx:None,
             started: false,
             defined: false,
             fn_receive_data: None,
@@ -78,13 +66,10 @@ impl SocketServer {
             protocol_type: protocol_type,
             ip_version: ip_version,
         });
-        let (tx_obj, rx_obj): (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
         SocketServer {
-            tx_obj:tx_obj,
-            rx_obj:rx_obj,
             url: String::new(),
-            msg_list:Arc::new(Mutex::new(Vec::new())),
             local_addr: local_addr,
+            tx:None,
             defined: true,
             started: false,
             fn_receive_data: None,
@@ -111,29 +96,15 @@ impl SocketServer {
         self.fn_error = Some(on_error);
     }
     pub fn send(&mut self,peer_addr:String, data: Vec<u8>)->bool{
-        let msg_list=self.msg_list.try_lock();
-        if msg_list.is_ok(){
-            let mut msg_list=msg_list.unwrap();
-            msg_list.push(SocketServerMessageList { peer_addr: peer_addr.clone(), data: data });
+        if self.tx.is_some(){
+            self.tx.as_mut().unwrap().send(data);
             return true;
         }
         false
-        /*
-        true
-        let result=self.tx_obj.send(data);
-        if result.is_ok(){
-            return true;
-        }else{
-            return false;
-        }
-        //self.msg_list.push(SocketServerMessageList { peer_addr: peer_addr, data: data });
-        */
     }
     fn start_udp(&mut self) -> bool {
         true
     }
-    // https://www.youtube.com/watch?v=hzSsOV2F7-s
-    // https://github.com/richardknox/rust-webserver/blob/master/src/bin/main.rs
     fn start_tcp(&mut self) -> bool {
         let listener = TcpListener::bind(&self.url);
         if listener.is_err() {
@@ -144,80 +115,60 @@ impl SocketServer {
             return false;
         }
 
-        let pool = ThreadPool::new(50);
-        let listener = listener.unwrap();
-        for stream in listener.incoming() {
-            let received_cloned = self.fn_receive_data;
-            let error_cloned = self.fn_error;
-            let new_client_cloned = self.fn_new_client;
-            let msg_list_cloned=self.msg_list.clone();
-            //let peer_addr = stream.peer_addr().unwrap().to_string();
-            pool.execute(move || {
-                let mut inner_stream=stream.unwrap();
-                std::thread::spawn(move||{
-                    if new_client_cloned.is_some() {
-                        let peer_addr = inner_stream.peer_addr().unwrap().to_string();
-                        new_client_cloned.unwrap()(peer_addr);
-                    }
-                    let mut buffer = [0; 4096];
-                    loop {
-                        let wait_addr=inner_stream.peer_addr();
-                        if wait_addr.is_ok(){
-                            let received_size = inner_stream.read(&mut buffer);
-                            println!(".");
-                            if received_size.is_ok() {
-                                let received_size = received_size.unwrap();
-                                if received_size > 0 {
-                                    if received_cloned.is_some() {
-                                        received_cloned.unwrap()(buffer[..received_size].to_vec());
-                                    }
-                                }
-                            } else {
-                                if error_cloned.is_some() {
-                                    error_cloned.unwrap()(SocketServerErrorType::Communication);
-                                }
-                                break;
-                            }
-                        }else{
-                            let msg_list_cloned_test=msg_list_cloned.try_lock();
-                            if msg_list_cloned_test.is_ok(){
-                                let mut msg_list_cloned_test=msg_list_cloned_test.unwrap();
-                                if msg_list_cloned_test.len()>0{
-                                    let msg_obj=msg_list_cloned_test.get(0);
-                                    dbg!(msg_obj);
-                                    msg_list_cloned_test.pop();
-                                }
-                            }
+        let server = listener.unwrap();
+        if server.set_nonblocking(true).is_err(){
+            return false;
+        }
+        //let server=server.unwrap();
+
+        //println!("buraya geldi");
+        //std::process::exit(0);
+    
+    
+        let mut clients = vec![];
+        let buffer_size=self.buffer_size;
+        
+        let (tx, rx) = mpsc::channel::<Vec<u8>>();
+        self.tx=Some(tx.clone());
+        loop {
+            if let Ok((mut socket, addr)) = server.accept() {
+                println!("Client {} connected", addr);
+    
+                let tx = tx.clone();
+                clients.push(socket.try_clone().expect("failed to clone client"));
+                thread::spawn(move || loop {
+                    let mut buff = vec![0; buffer_size];
+    
+                    match socket.read_exact(&mut buff) {
+                        Ok(_) => {
+                            let msg = buff.into_iter().take_while(|&x| x != 0).collect::<Vec<_>>();
+                            let msg = String::from_utf8(msg).expect("invalid utf8 message");
+    
+                            println!("{} {:?}", addr, msg);
+                            tx.send(msg).expect("failed to send message to rx");
+                        }
+                        Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
+                        Err(_) => {
+                            println!("Closing connection with: {}", addr);
+                            break;
                         }
                     }
-                    /*
-                    //stream.write("ok".as_bytes()).unwrap();
-                    //stream.flush().unwrap();
-                    */
+                    thread::sleep(::std::time::Duration::from_millis(100));
                 });
-                //let data:Vec<u8>=vec![1,2,3];
-                //inner_stream.write(&data);
-                println!("step-2");
-
-                /*
-
-
-                let data:Vec<u8>=vec![1,2,3];
-
-                std::thread::spawn(move ||{
-                    stream.unwrap().write(&data);
-                    //for data in self.rx_obj.recv(){
-                    //}
-                });
-                std::thread::spawn(move||loop{
-                    if msg_list_cloned.len()>0{
-                        
-                    }
-                    println!("ddd {}",msg_list_cloned.len());
-                    std::thread::sleep(Duration::from_micros(800000));
-                });
-                */
-            });
+            }
+    
+            if let Ok(msg) = rx.try_recv() {
+                clients = clients
+                    .into_iter()
+                    .filter_map(|mut client| {
+                        let mut buff = msg.clone().into_bytes();
+                        buff.resize(buffer_size, 0);
+    
+                        client.write_all(&buff).map(|_| client).ok()
+                    })
+                    .collect::<Vec<_>>();
+            }
+            thread::sleep(::std::time::Duration::from_millis(100));
         }
         return true;
     }
@@ -270,7 +221,6 @@ fn full_test() {
         println!("on error : {:?}", data);
     });
     server_obj.start();
-
-    //server_obj.send(on_new_client.clone(), "welcome".as_bytes().to_vec());
+    server_obj.send(String::from("127.0.0.1:1234"), "welcome".as_bytes().to_vec());
     assert!(true)
 }
