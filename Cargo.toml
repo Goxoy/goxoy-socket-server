@@ -12,5 +12,5 @@ repository = "https://github.com/Goxoy/goxoy-socket-server/"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-goxoy-address-parser = "0.0.7"
-goxoy-socket-client = "0.1.7"
+goxoy-address-parser = "0.0.9"
+goxoy-socket-client = "0.1.9"
