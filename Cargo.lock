@@ -4,23 +4,29 @@ version = 3
 
 [[package]]
 name = "goxoy-address-parser"
-version = "0.0.3"
+version = "0.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "490c575dcd54ff3281e8e85d4abb0f1da7bd16b46fa6a44c6f903c2bcbc588b7"
+checksum = "9dd38a88341e948563f55deffb4620ff43fdc51b507961f1e08d00a06958ee0c"
+
+[[package]]
+name = "goxoy-address-parser"
+version = "0.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7db048bf39087d727f8e45c7595f02236c70ec8cf9b1c34b0cac47c49b258a2a"
 
 [[package]]
 name = "goxoy-socket-client"
-version = "0.1.6"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fa454a18978fb88fa8e3514af507dc16593ee3ee35fab713d70015d372ca253"
+checksum = "35e87f147a0ce97c031e006ff6e1f38cdb985714a371e686740a0b3a0f8e3209"
 dependencies = [
- "goxoy-address-parser",
+ "goxoy-address-parser 0.0.5",
 ]
 
 [[package]]
 name = "goxoy-socket-server"
 version = "0.1.0"
 dependencies = [
- "goxoy-address-parser",
+ "goxoy-address-parser 0.0.7",
  "goxoy-socket-client",
 ]
