@@ -25,7 +25,7 @@ dependencies = [
 
 [[package]]
 name = "goxoy-socket-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "goxoy-address-parser 0.0.7",
  "goxoy-socket-client",
